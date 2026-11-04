@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eat to live</title>
+<meta name="theme-color" content="#0d0d0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Eat to live">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap signin" id="signin" hidden>
+  <h1>Eat to live</h1>
+  <form id="emailForm" autocomplete="on">
+    <div style="display:grid;gap:14px">
+      <p>Sign in with your email. We'll send you a code.</p>
+      <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required aria-label="Email">
+      <button class="primary" type="submit" id="sendCode">Send code</button>
+    </div>
+  </form>
+  <form id="codeForm" hidden>
+    <div style="display:grid;gap:14px">
+      <p id="codeHint">Enter the code from the email.</p>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" maxlength="10" required aria-label="Code">
+      <button class="primary" type="submit">Sign in</button>
+      <button class="signout" type="button" id="backToEmail">Use a different email</button>
+    </div>
+  </form>
+  <div class="err" id="signinErr"></div>
+</div>
+
+<div id="app" hidden>
+
+
+<div class="wrap">
+  <header>
+    <h1>Eat to live</h1>
+    <div class="count" id="count"></div>
+  </header>
+  <div class="status" id="status">Loading your list…</div>
+  <div class="peers" id="peers" hidden></div>
+  <div class="progress" id="progress" hidden>
+    <div class="ptext"><b id="leftN">0</b> left of <span id="totalN">0</span></div>
+    <button class="ghost" type="button" id="endShop">Finish</button>
+    <div class="pbar" aria-hidden="true"><i id="pfill"></i></div>
+  </div>
+  <button class="start" type="button" id="startShop">Start shopping</button>
+
+  <div class="tools">
+    <input id="search" type="search" placeholder="Find an item" aria-label="Find an item" autocomplete="off">
+    <button class="ghost" type="button" id="openPick" aria-expanded="false">Coop basics</button>
+    <button class="ghost" type="button" id="openImport" aria-expanded="false">Paste</button>
+  </div>
+  <div class="panel" id="importPanel" hidden>
+    <p>Paste your whole list, one item per line. Copying a checklist straight out of Notes works. Items already on the list are skipped.</p>
+    <textarea id="importText" placeholder="Medjool hurma&#10;Banane *5 (yeşil)&#10;Lauch&#10;Yoğurt 1kg"></textarea>
+    <label><input type="checkbox" id="importNeeded"> Put them all under To buy</label>
+    <div class="row">
+      <button class="ghost" type="button" id="cancelImport">Cancel</button>
+      <button class="primary" type="button" id="doImport">Add items</button>
+    </div>
+  </div>
+
+  <div class="panel" id="pickPanel" hidden>
+    <p>Tap the products you usually buy at Coop, then add them. You can rename any item later, for example to add a brand or an amount.</p>
+    <div id="pickList"></div>
+    <label><input type="checkbox" id="pickNeeded"> Put them under To buy (otherwise they start as ticked)</label>
+    <div class="row pick-actions">
+      <button class="ghost" type="button" id="cancelPick">Close</button>
+      <button class="primary" type="button" id="doPick" disabled>Add 0 items</button>
+    </div>
+  </div>
+
+  <div class="due" id="dueBar" hidden>
+    <span id="dueText"></span>
+    <button class="primary" type="button" id="dueAdd">Add to To buy</button>
+  </div>
+
+  <div class="section-label"><span>To buy</span></div>
+  <ul id="todo"></ul>
+
+  <div class="section-label">
+    <span id="doneLabel">In the cart</span>
+    <button type="button" id="toggleDone" aria-expanded="true">Hide</button>
+  </div>
+  <ul id="done"></ul>
+  <p class="who"><span id="whoami"></span> <button class="signout" id="signOut" type="button">Sign out</button></p>
+</div>
+
+<div class="add">
+  <form id="addForm" autocomplete="off">
+    <input id="newItem" placeholder="Add an item, e.g. Kiraz 500g" enterkeyhint="done" aria-label="New item">
+    <button type="submit">Add</button>
+  </form>
+</div>
+
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
