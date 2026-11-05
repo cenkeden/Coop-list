@@ -1,0 +1,168 @@
+-- Coop list: run this once in Supabase → SQL Editor.
+
+-- Who may use the list. Add one row per family member (their sign-in email).
+create table if not exists public.members (
+  email text primary key,
+  display_name text not null default ''
+);
+
+create table if not exists public.items (
+  id text primary key default gen_random_uuid()::text,
+  name text not null,
+  done boolean not null default true,      -- true = in the cart / have it, false = to buy
+  ord double precision not null default 0, -- order inside an aisle
+  aisle text not null default 'other',
+  bought text[] not null default '{}',      -- purchase dates, YYYY-MM-DD
+  updated_by text,                          -- email of whoever changed it last
+  updated_at timestamptz not null default now()
+);
+
+-- Only signed-in people listed in members can read or change anything.
+create or replace function public.is_member() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.members where lower(email) = lower(auth.jwt() ->> 'email'));
+$$;
+
+alter table public.members enable row level security;
+alter table public.items enable row level security;
+
+drop policy if exists "members can read members" on public.members;
+create policy "members can read members" on public.members
+  for select to authenticated using (public.is_member());
+
+drop policy if exists "members can do everything with items" on public.items;
+create policy "members can do everything with items" on public.items
+  for all to authenticated using (public.is_member()) with check (public.is_member());
+
+-- Live updates between phones.
+alter table public.items replica identity full;
+do $$ begin
+  alter publication supabase_realtime add table public.items;
+exception when duplicate_object then null; end $$;
+
+-- Your current list (118 items) with purchase history from the 7 Coop receipts.
+insert into public.items (id, name, done, ord, aisle, bought) values
+  ('i01', 'Medjool hurma', false, 1, 'fruit', array['2026-10-23','2026-10-31']::text[]),
+  ('i02', 'Banane *5 (yeşil)', false, 2, 'fruit', array['2026-09-04','2026-09-11','2026-09-18','2026-10-09','2026-10-16','2026-10-23','2026-10-31']::text[]),
+  ('i03', 'Persimon x4-5', false, 3, 'fruit', array['2026-10-09','2026-10-16','2026-10-31']::text[]),
+  ('i04', 'Primogusto clementin x6', false, 4, 'fruit', array['2026-10-16','2026-10-23']::text[]),
+  ('i05', 'Trauben (kernlos Alp için)', false, 5, 'fruit', array['2026-09-04','2026-09-11','2026-09-18','2026-10-09','2026-10-16','2026-10-23']::text[]),
+  ('i06', 'Elma primagusto x5', false, 6, 'fruit', array['2026-09-04','2026-09-11','2026-09-18','2026-10-16']::text[]),
+  ('i07', 'Avokado x2', true, 7, 'other', array['2026-09-04','2026-10-16']::text[]),
+  ('i08', 'Kiraz', true, 8, 'fruit', '{}'::text[]),
+  ('i09', 'Bio çilek (varsa)', true, 9, 'fruit', '{}'::text[]),
+  ('i10', 'Karpuz', false, 10, 'fruit', '{}'::text[]),
+  ('i11', 'Pfirsich (Aprikose)', true, 11, 'fruit', array['2026-09-04']::text[]),
+  ('r101', 'Bio Zwetschgen / Pflaumen 500g', false, 101, 'fruit', array['2026-09-04','2026-09-18','2026-10-09']::text[]),
+  ('r102', 'Primagusto Trauben Muscat', false, 102, 'fruit', array['2026-09-18','2026-10-09']::text[]),
+  ('r103', 'Primagusto Zitronen', false, 103, 'fruit', array['2026-10-09','2026-10-16']::text[]),
+  ('r104', 'Primagusto Kiwi grün', true, 104, 'fruit', array['2026-10-09']::text[]),
+  ('r105', 'Betty Bossi Granatapfel 140g', false, 105, 'fruit', array['2026-09-11','2026-09-18','2026-10-09']::text[]),
+  ('r106', 'FM Ananas, Traube & Beeren 220g', true, 106, 'fruit', array['2026-10-09']::text[]),
+  ('r107', 'Planet Farms Mini Eisbergsalat 80g', false, 107, 'veg', array['2026-09-04','2026-09-11','2026-09-18','2026-10-16']::text[]),
+  ('r108', 'Planet Farms Jungsalat aromatisch 80g', false, 108, 'veg', array['2026-09-04','2026-09-11','2026-09-18','2026-10-16']::text[]),
+  ('r109', 'Planet Farms Jungsalat vital 80g', false, 109, 'veg', array['2026-09-04','2026-09-11','2026-10-16']::text[]),
+  ('r110', 'Bio Gurken', false, 110, 'veg', array['2026-09-04','2026-09-18','2026-10-09']::text[]),
+  ('r111', 'Snack Gurken 250g', true, 111, 'veg', array['2026-10-16']::text[]),
+  ('r112', 'Bio Tomaten Cherry Mix 250g', false, 112, 'veg', array['2026-09-04','2026-09-11','2026-09-18','2026-10-09','2026-10-16','2026-10-23']::text[]),
+  ('r113', 'Bio Babykartoffeln 500g', true, 113, 'veg', array['2026-09-04']::text[]),
+  ('r114', 'Primagusto Kartoffeln Celtiane', false, 114, 'veg', array['2026-09-18','2026-10-09','2026-10-16']::text[]),
+  ('r115', 'Zwiebeln gelb', false, 115, 'veg', array['2026-09-18','2026-10-09','2026-10-16']::text[]),
+  ('r116', 'Lauch grün', false, 116, 'veg', array['2026-09-18']::text[]),
+  ('r117', 'Bio Karotten 1kg', true, 117, 'veg', array['2026-09-18','2026-10-09','2026-10-23']::text[]),
+  ('r118', 'Bio Knoblauch 150g', true, 118, 'veg', array['2026-10-09']::text[]),
+  ('r119', 'Naturaplan Bio Lasagne Bolognese 400g ×2', false, 119, 'ready', array['2026-09-18','2026-10-09']::text[]),
+  ('r120', 'Naturaplan Bio Gnocchi di Patate 500g', true, 120, 'ready', array['2026-09-11']::text[]),
+  ('r121', 'Prix Garantie Poulet Cocktail 235g', true, 121, 'ready', array['2026-09-18']::text[]),
+  ('r122', 'Naturaplan Bio Rüeblisalat 180g', true, 122, 'ready', array['2026-09-18']::text[]),
+  ('r123', 'Betty Bossi Thai Karottensalat', true, 123, 'ready', array['2026-10-09']::text[]),
+  ('r124', 'Naturaplan Bio Kichererbsen & Süsskartoffel Salat', true, 124, 'ready', array['2026-10-09']::text[]),
+  ('r125', 'Naturaplan Bio Linsensalat 220g', true, 125, 'ready', array['2026-10-09']::text[]),
+  ('r126', 'Prix Garantie Mischsalat Bowl 220g', true, 126, 'ready', array['2026-10-09']::text[]),
+  ('r127', 'Naturaplan Bio Marktsalat 185g', true, 127, 'ready', array['2026-10-09']::text[]),
+  ('r128', 'Balsamico Dressing 60ml', true, 128, 'ready', array['2026-10-09']::text[]),
+  ('r129', 'Karma Kimchi raw 475g', true, 129, 'ready', array['2026-10-09']::text[]),
+  ('r130', 'Bio Vollkorntoast 250g', true, 130, 'bread', array['2026-09-04','2026-09-11','2026-09-18','2026-10-09','2026-10-23','2026-10-31']::text[]),
+  ('r131', 'Old El Paso Wrap Tortillas 350g', true, 131, 'bread', array['2026-09-04','2026-09-11','2026-09-18','2026-10-23']::text[]),
+  ('r132', 'Old El Paso Tortilla Thin 6 Stk', false, 132, 'bread', array['2026-10-09','2026-10-16']::text[]),
+  ('r133', 'Cinnamon Roll 110g', false, 133, 'bread', array['2026-10-16','2026-10-23']::text[]),
+  ('r134', 'CNp Bio Skyr Nature 400g ×4', true, 134, 'dairy', array['2026-09-04','2026-09-11','2026-09-18','2026-10-09','2026-10-16','2026-10-23','2026-10-31']::text[]),
+  ('r135', 'Naturaplan Kefir-Drink Nature 500ml ×2', false, 135, 'dairy', array['2026-09-11','2026-09-18','2026-10-09','2026-10-16','2026-10-23']::text[]),
+  ('r136', 'CNp Bio Quark nature 500g', true, 136, 'dairy', array['2026-10-16']::text[]),
+  ('r137', 'Coop Le Gruyère Scheiben hauchfein 80g', true, 137, 'dairy', array['2026-09-11','2026-09-18','2026-10-09','2026-10-31']::text[]),
+  ('r138', 'Coop Le Gruyère AOP Käserollen 110g', true, 138, 'dairy', array['2026-09-04']::text[]),
+  ('r139', 'Coop Gruyère mild Portion', true, 139, 'dairy', array['2026-10-09']::text[]),
+  ('r140', 'Chavroux Scheiben 120g ×2', true, 140, 'dairy', array['2026-09-11','2026-10-09','2026-10-31']::text[]),
+  ('r141', 'Philadelphia Nature 200g', true, 141, 'dairy', array['2026-09-04','2026-10-23']::text[]),
+  ('r142', 'Salakis 200g', true, 142, 'dairy', array['2026-09-04']::text[]),
+  ('r143', 'Bio Mozzarelline 160g', true, 143, 'dairy', array['2026-10-09']::text[]),
+  ('r144', 'Bio Parmigiano gerieben 80g', true, 144, 'dairy', array['2026-10-09']::text[]),
+  ('r145', 'Bio Butter 200g', true, 145, 'dairy', array['2026-10-09']::text[]),
+  ('r146', 'Bio Eier 6er', false, 146, 'dairy', array['2026-09-11','2026-10-09']::text[]),
+  ('r147', 'Karma Bio Kokosdrink 1L', true, 147, 'dairy', array['2026-09-11']::text[]),
+  ('r148', 'Country Crunchy Jogurt Choco-Müesli', true, 148, 'dairy', array['2026-10-23']::text[]),
+  ('r149', 'Wander Ovo Jogurt Crisp Müesli', true, 149, 'dairy', array['2026-10-23']::text[]),
+  ('r150', 'Sapori Tiramisu 2×90g', true, 150, 'dairy', array['2026-10-16']::text[]),
+  ('r151', 'Naturaplan Mostbröckli ca. 70g', true, 151, 'meat', array['2026-09-04','2026-09-11','2026-10-09','2026-10-31']::text[]),
+  ('r152', 'Trutenbrust geräuchert gekocht', false, 152, 'meat', array['2026-09-11','2026-09-18','2026-10-16']::text[]),
+  ('r153', 'Natura-Beef Rindfleischspiess', true, 153, 'meat', array['2026-09-18','2026-10-16']::text[]),
+  ('r154', 'Bio Lachsfilet ca. 230g', true, 154, 'meat', array['2026-09-11','2026-10-23']::text[]),
+  ('r155', 'Bio Pouletbrust ca. 220g', true, 155, 'meat', array['2026-09-18']::text[]),
+  ('r156', 'Bio Rindshackfleisch ca. 300g', true, 156, 'meat', array['2026-09-11']::text[]),
+  ('r157', 'Naturaplan Bio Zuckermaiskörner 160g', false, 157, 'pantry', array['2026-09-11','2026-09-18','2026-10-09']::text[]),
+  ('r158', 'Rummo Sugo al Basilico 340g', true, 158, 'pantry', array['2026-09-11']::text[]),
+  ('r159', 'Bio Wildreis-Mix 1kg', true, 159, 'pantry', array['2026-09-11']::text[]),
+  ('r160', 'Fine Food Fregola Sarda 500g', true, 160, 'pantry', array['2026-09-11']::text[]),
+  ('r161', 'F.Berio Olivenöl Spray 200ml', true, 161, 'pantry', array['2026-09-18']::text[]),
+  ('r162', 'Sapori d''Italia Olive Mix 180g', true, 162, 'pantry', array['2026-10-23','2026-10-31']::text[]),
+  ('r163', 'Bio Senf Dijon 200g', true, 163, 'pantry', array['2026-10-23']::text[]),
+  ('r164', 'Bio CH-Geflügel Brühe 230ml', true, 164, 'pantry', array['2026-10-31']::text[]),
+  ('r165', 'Karma Bio Kichererbsen 240g', true, 165, 'pantry', array['2026-10-09']::text[]),
+  ('r166', 'Bio Red Kidney Beans 260g', true, 166, 'pantry', array['2026-10-09']::text[]),
+  ('r167', 'Karma Bio Schwarze Bohnen 260g', true, 167, 'pantry', array['2026-10-09']::text[]),
+  ('r168', 'Bud Spencer Fagioli Tex Mex', true, 168, 'pantry', array['2026-10-09']::text[]),
+  ('r169', 'Naturaplan Bio Beerenmüesli 300g', true, 169, 'pantry', array['2026-09-18']::text[]),
+  ('r170', 'Betty Bossi Choco Cornflakes 150g', true, 170, 'pantry', array['2026-10-23']::text[]),
+  ('r171', 'Naturaplan Bio Kürbiskerne 300g', true, 171, 'pantry', array['2026-09-18']::text[]),
+  ('r172', 'Naturaplan Bio Pinienkerne 100g', true, 172, 'pantry', array['2026-10-31']::text[]),
+  ('r173', 'Starbucks Nespresso Guatemala 10 Kapseln', true, 173, 'pantry', array['2026-09-18']::text[]),
+  ('r174', 'Starbucks Nespresso Breakfast 10 Kapseln', true, 174, 'pantry', array['2026-09-18']::text[]),
+  ('r175', 'Naturaplan Bio Studentenfutter 3×50g', true, 175, 'sweets', array['2026-09-18','2026-10-23','2026-10-31']::text[]),
+  ('r176', 'Naturaplan Bio Studentenfutter 500g', true, 176, 'sweets', array['2026-09-18','2026-10-31']::text[]),
+  ('r177', 'Naturaplan Bio Pistazien geröstet 3×50g', true, 177, 'sweets', array['2026-09-18']::text[]),
+  ('r178', 'Bio Erdnüsse 500g', true, 178, 'sweets', array['2026-10-09']::text[]),
+  ('r179', 'Naturaplan Bio Nuss-Mix geröstet 150g', true, 179, 'sweets', array['2026-10-31']::text[]),
+  ('r180', 'Naturaplan Bio Pekannusskerne 150g', true, 180, 'sweets', array['2026-10-31']::text[]),
+  ('r181', 'Naturaplan Bio Paranüsse 150g', true, 181, 'sweets', array['2026-10-31']::text[]),
+  ('r182', 'Naturaplan Bio Macadamia 150g', true, 182, 'sweets', array['2026-10-31']::text[]),
+  ('r183', 'Naturaplan Bio Exotic Mix 130g', true, 183, 'sweets', array['2026-10-31']::text[]),
+  ('r184', 'Naturaplan Bio Snack Mix 150g', true, 184, 'sweets', array['2026-10-31']::text[]),
+  ('r185', 'DAR-VIDA Choco noir', true, 185, 'sweets', array['2026-09-04']::text[]),
+  ('r186', 'Bio Mini-Reiswaffeln Milchschokolade', true, 186, 'sweets', array['2026-10-23']::text[]),
+  ('r187', 'JaMaDu Maiswaffeln 130g', true, 187, 'sweets', array['2026-10-23']::text[]),
+  ('r188', 'Käse-Chips Natur 100g', true, 188, 'sweets', array['2026-10-16']::text[]),
+  ('r189', 'Lindt Dubai Style Chocolate', true, 189, 'sweets', array['2026-10-16']::text[]),
+  ('r190', 'Evian mit Kohlensäure', true, 190, 'drinks', array['2026-09-18']::text[]),
+  ('r191', 'Evian 50cl', true, 191, 'drinks', array['2026-10-31']::text[]),
+  ('r192', 'Rivella Peach Zero 33cl', true, 192, 'drinks', array['2026-10-16']::text[]),
+  ('r193', 'Bio Beerenmischung TK 300g ×4', true, 193, 'frozen', array['2026-09-04','2026-10-09','2026-10-16','2026-10-31']::text[]),
+  ('r194', 'Bio Brombeeren TK 300g', false, 194, 'frozen', array['2026-09-11','2026-09-18']::text[]),
+  ('r195', 'Bio Broccoli TK 400g', false, 195, 'frozen', array['2026-09-11','2026-09-18']::text[]),
+  ('r196', 'Bio Bohnen extra fein TK 350g', true, 196, 'frozen', array['2026-10-16']::text[]),
+  ('r197', 'Pampers 99% Water Feuchttücher 60 Stk', true, 197, 'home', array['2026-09-11','2026-09-18','2026-10-16','2026-10-23','2026-10-31']::text[]),
+  ('r198', 'Oecoplan Abwaschmittel', true, 198, 'home', array['2026-10-23']::text[]),
+  ('r199', 'Oecoplan All-in-1 Tabs 30', true, 199, 'home', array['2026-10-31']::text[]),
+  ('r200', 'Dettol Desinfektionstücher 60 Stk', true, 200, 'home', array['2026-10-23','2026-10-31']::text[]),
+  ('r201', 'Coop Kompostierbeutel 9l', true, 201, 'home', array['2026-10-23']::text[]),
+  ('r202', 'Swirl Duftmüllbeutel 20', true, 202, 'home', array['2026-10-23']::text[]),
+  ('r203', 'Coop Backtrennpapier', true, 203, 'home', array['2026-10-31']::text[]),
+  ('r204', 'Nivea Men Rasierschaum', true, 204, 'home', array['2026-09-11']::text[]),
+  ('r205', 'Nivea Men Deo Roll-on', true, 205, 'home', array['2026-10-23']::text[]),
+  ('r206', 'Weleda For Men 3in1 Shower', true, 206, 'home', array['2026-10-31']::text[]),
+  ('r207', 'Labello Duo Classic Care', true, 207, 'home', array['2026-10-31']::text[])
+on conflict (id) do nothing;
+
+-- Family members: replace with your real emails and names, one line each.
+insert into public.members (email, display_name) values
+  ('you@example.com', 'Cenk')
+on conflict (email) do update set display_name = excluded.display_name;
